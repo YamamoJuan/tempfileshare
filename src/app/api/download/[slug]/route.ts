@@ -1,61 +1,102 @@
-// File: /src/app/api/download/[slug]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { generateSlug } from '@/utils/generateSlug'
 
-type Props = {
-  params: Promise<{ slug: string }>
-}
-
-export async function GET(req: NextRequest, { params }: Props) {
+export async function POST(req: NextRequest) {
   try {
-    const { slug } = await params
+    const formData = await req.formData()
+    const file = formData.get('file') as File | null
 
-    // Get files in folder
-    const { data: files, error } = await supabase.storage
+    if (!file) {
+      return NextResponse.json({ error: 'File not found' }, { status: 400 })
+    }
+
+    console.log('📤 Starting upload for file:', file.name, 'Size:', file.size)
+
+    const slug = generateSlug()
+    const filePath = `${slug}/${file.name}`
+    const metadataPath = `${slug}/metadata.json`
+
+    console.log('🎯 Generated slug:', slug)
+    console.log('📂 File path:', filePath)
+
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = new Uint8Array(arrayBuffer)
+
+    // Upload file utama
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('uploads')
+      .upload(filePath, buffer, {
+        cacheControl: '3600',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.log('❌ Upload error:', uploadError.message)
+      return NextResponse.json({ error: uploadError.message }, { status: 500 })
+    }
+
+    console.log('✅ File uploaded successfully:', uploadData)
+
+    // Upload metadata file
+    const metadata = {
+      originalName: file.name,
+      size: file.size,
+      type: file.type,
+      uploadedAt: new Date().toISOString(),
+      slug: slug
+    }
+
+    const { data: metaData, error: metaError } = await supabase.storage
+      .from('uploads')
+      .upload(metadataPath, JSON.stringify(metadata, null, 2), {
+        contentType: 'application/json',
+        upsert: true,
+      })
+
+    if (metaError) {
+      console.log('⚠️ Metadata upload error:', metaError.message)
+      // Tidak return error karena file utama sudah berhasil
+    } else {
+      console.log('✅ Metadata uploaded successfully:', metaData)
+    }
+
+    // Verify upload dengan list files
+    const { data: verifyFiles, error: verifyError } = await supabase.storage
       .from('uploads')
       .list(slug)
 
-    if (error || !files || files.length === 0) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 })
+    console.log('🔍 Verification - files in folder:', verifyFiles)
+    if (verifyError) {
+      console.log('⚠️ Verification error:', verifyError.message)
     }
 
-    // Filter actual files
-    const actualFiles = files.filter(file => 
-      file.name !== '.emptyFolderPlaceholder' && 
-      !file.name.endsWith('.json') &&
-      !file.name.startsWith('.')
-    )
-
-    if (actualFiles.length === 0) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 })
-    }
-
-    const file = actualFiles[0]
-    const filePath = `${slug}/${file.name}`
-
-    // Download file content
-    const { data, error: downloadError } = await supabase.storage
+    // Generate direct download URL dengan parameter download
+    const { data: signedUrl, error: signedError } = await supabase.storage
       .from('uploads')
-      .download(filePath)
+      .createSignedUrl(filePath, 60 * 60 * 24, {
+        download: file.name // Set filename untuk download
+      })
 
-    if (downloadError || !data) {
-      return NextResponse.json({ error: 'Download failed' }, { status: 500 })
+    if (signedError) {
+      console.log('❌ Signed URL error:', signedError.message)
+      return NextResponse.json({ error: 'Failed to create download link' }, { status: 500 })
     }
 
-    // Convert blob to array buffer
-    const arrayBuffer = await data.arrayBuffer()
+    console.log('✅ Signed URL created:', signedUrl?.signedUrl)
 
-    // Return file with proper headers for direct download
-    return new NextResponse(arrayBuffer, {
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${file.name}"`,
-        'Content-Length': arrayBuffer.byteLength.toString(),
-      },
+    return NextResponse.json({ 
+      slug,
+      fileName: file.name,
+      downloadUrl: signedUrl?.signedUrl,
+      message: 'Upload successful'
     })
 
   } catch (error) {
-    console.log('💥 Download error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.log('💥 Unexpected error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' }, 
+      { status: 500 }
+    )
   }
 }
