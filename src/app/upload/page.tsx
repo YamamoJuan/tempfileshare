@@ -10,119 +10,77 @@ export default function UploadPage() {
   const [error, setError] = useState('')
   const [uploadProgress, setUploadProgress] = useState(0)
 
-  // Main upload function dengan hybrid system
+  // Main upload function - ALL files direct to Supabase
   const handleUpload = async (file: File) => {
-    const maxServerSize = 4 * 1024 * 1024 // 4MB
-    
-    console.log('🚀 Starting upload for:', file.name, 'Size:', file.size)
+    console.log('🚀 Starting direct upload for:', file.name, 'Size:', file.size, 'bytes')
     setError('')
     setUploadProgress(10)
 
-    // Jika file kecil (< 4MB), upload via server
-    if (file.size <= maxServerSize) {
-      console.log('📤 Using server upload (file < 4MB)')
+    try {
+      // 1. Get signed URL dari server
+      const urlResponse = await fetch(
+        `/api/upload?fileName=${encodeURIComponent(file.name)}&fileSize=${file.size}`
+      )
       
-      const formData = new FormData()
-      formData.append('file', file)
+      if (!urlResponse.ok) {
+        throw new Error('Failed to get upload URL')
+      }
+      
+      const { signedUrl, slug, fileName } = await urlResponse.json()
+      console.log('🔗 Got signed URL for direct upload')
       setUploadProgress(30)
 
-      try {
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        })
+      // 2. Upload langsung ke Supabase
+      const uploadResponse = await fetch(signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+      })
 
-        setUploadProgress(80)
+      setUploadProgress(70)
 
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error('Server upload failed:', errorText)
-          throw new Error(`Upload failed: ${response.status}`)
-        }
-
-        const data = await response.json()
-        console.log('✅ Server upload success:', data)
-        setUploadProgress(100)
-        return data
-
-      } catch (error) {
-        console.error('💥 Server upload error:', error)
-        throw error
+      if (!uploadResponse.ok) {
+        throw new Error('Direct upload to Supabase failed')
       }
-    } 
-    
-    // Jika file besar (> 4MB), upload langsung ke Supabase
-    else {
-      console.log('📤 Using direct upload (file > 4MB)')
-      
-      try {
-        setUploadProgress(20)
-        
-        // 1. Get signed URL dari server
-        const urlResponse = await fetch(
-          `/api/upload?fileName=${encodeURIComponent(file.name)}&fileSize=${file.size}`
-        )
-        
-        if (!urlResponse.ok) {
-          throw new Error('Failed to get upload URL')
-        }
-        
-        const { signedUrl, slug, fileName } = await urlResponse.json()
-        console.log('🔗 Got signed URL for direct upload')
-        setUploadProgress(40)
 
-        // 2. Upload langsung ke Supabase
-        const uploadResponse = await fetch(signedUrl, {
-          method: 'PUT',
-          body: file,
-          headers: {
-            'Content-Type': file.type || 'application/octet-stream',
-          },
-        })
+      console.log('✅ Direct upload success')
+      setUploadProgress(85)
 
-        setUploadProgress(70)
-
-        if (!uploadResponse.ok) {
-          throw new Error('Direct upload to Supabase failed')
-        }
-
-        console.log('✅ Direct upload success')
-        setUploadProgress(85)
-
-        // 3. Save metadata via server
-        const metadataResponse = await fetch('/api/upload/metadata', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            slug,
-            fileName: file.name,
-            size: file.size,
-            type: file.type,
-          }),
-        })
-
-        setUploadProgress(95)
-
-        const baseUrl = window.location.origin
-        const downloadUrl = `${baseUrl}/api/download/${slug}`
-
-        setUploadProgress(100)
-
-        return {
-          success: true,
+      // 3. Save metadata via server
+      const metadataResponse = await fetch('/api/upload/metadata', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           slug,
           fileName: file.name,
-          fileSize: file.size,
-          downloadUrl,
-          message: 'Direct upload successful'
-        }
+          size: file.size,
+          type: file.type,
+        }),
+      })
 
-      } catch (error) {
-        console.error('💥 Direct upload error:', error)
-        throw error
+      setUploadProgress(95)
+
+      const baseUrl = window.location.origin
+      const downloadUrl = `${baseUrl}/api/download/${slug}`
+
+      setUploadProgress(100)
+
+      return {
+        success: true,
+        slug,
+        fileName: file.name,
+        fileSize: file.size,
+        downloadUrl,
+        message: 'Direct upload successful'
       }
+
+    } catch (error) {
+      console.error('💥 Direct upload error:', error)
+      throw error
     }
   }
 
@@ -202,7 +160,7 @@ export default function UploadPage() {
             <div className="mt-2 text-sm text-gray-600">
               <p><strong>File:</strong> {file.name}</p>
               <p><strong>Size:</strong> {formatFileSize(file.size)}</p>
-              <p><strong>Upload method:</strong> {file.size > 4*1024*1024 ? 'Direct to Supabase (Large file)' : 'Via Server (Small file)'}</p>
+              <p><strong>Upload method:</strong> 🚀 Direct to Supabase (All files)</p>
             </div>
           )}
         </div>
