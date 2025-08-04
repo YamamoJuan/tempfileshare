@@ -1,16 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-    responseLimit: '50mb',
-  },
-  // Untuk App Router, gunakan experimental
   experimental: {
     serverComponentsExternalPackages: ['@supabase/supabase-js'],
-  }
+  },
+  // App Router doesn't use api.bodyParser
+  // Size limit handled in route handler itself
 };
 
 export default nextConfig;
