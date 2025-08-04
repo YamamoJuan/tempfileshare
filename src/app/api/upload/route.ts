@@ -4,6 +4,24 @@ import { generateSlug } from '@/utils/generateSlug'
 
 export async function POST(req: NextRequest) {
   try {
+    // Check request size first
+    const contentLength = req.headers.get('content-length')
+    if (contentLength) {
+      const size = parseInt(contentLength)
+      const maxSize = 4 * 1024 * 1024 // 4MB untuk Vercel Free
+      
+      if (size > maxSize) {
+        return NextResponse.json(
+          { 
+            error: 'File too large for server processing',
+            shouldUseDirectUpload: true,
+            maxSize: maxSize
+          }, 
+          { status: 413 }
+        )
+      }
+    }
+
     const formData = await req.formData()
     const file = formData.get('file') as File | null
 
@@ -11,43 +29,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File not found' }, { status: 400 })
     }
 
-    // Validasi size file (50MB maksimal)
-    const maxSize = 50 * 1024 * 1024; // 50MB dalam bytes
-    if (file.size > maxSize) {
-      console.log('❌ File too large:', file.size, 'bytes. Max:', maxSize, 'bytes')
-      return NextResponse.json(
-        { 
-          error: 'File too large. Maximum size is 50MB',
-          fileSize: file.size,
-          maxSize: maxSize
-        }, 
-        { status: 413 }
-      )
-    }
-
-    // Validasi tipe file (opsional - sesuaikan kebutuhan)
-    const allowedTypes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'text/plain', 'application/zip',
-      'application/x-zip-compressed', 'application/octet-stream'
-    ]
-    
-    if (!allowedTypes.includes(file.type) && file.type !== '') {
-      console.log('❌ Invalid file type:', file.type)
-      return NextResponse.json(
-        { error: 'File type not allowed' }, 
-        { status: 400 }
-      )
-    }
-
-    console.log('📤 Starting upload for file:', file.name, 'Size:', file.size, 'Type:', file.type)
+    console.log('📤 Starting upload for file:', file.name, 'Size:', file.size)
 
     const slug = generateSlug()
     const filePath = `${slug}/${file.name}`
     const metadataPath = `${slug}/metadata.json`
 
     console.log('🎯 Generated slug:', slug)
-    console.log('📂 File path:', filePath)
 
     const arrayBuffer = await file.arrayBuffer()
     const buffer = new Uint8Array(arrayBuffer)
@@ -62,15 +50,6 @@ export async function POST(req: NextRequest) {
 
     if (uploadError) {
       console.log('❌ Supabase upload error:', uploadError.message)
-      
-      // Handle specific Supabase errors
-      if (uploadError.message.includes('Payload too large')) {
-        return NextResponse.json(
-          { error: 'File too large for storage service' }, 
-          { status: 413 }
-        )
-      }
-      
       return NextResponse.json(
         { error: `Upload failed: ${uploadError.message}` }, 
         { status: 500 }
@@ -79,60 +58,36 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ File uploaded successfully:', uploadData)
 
-    // Upload metadata file
+    // Upload metadata
     const metadata = {
       originalName: file.name,
       size: file.size,
       type: file.type,
       uploadedAt: new Date().toISOString(),
-      slug,
-      sizeFormatted: formatFileSize(file.size)
+      slug
     }
 
-    const { data: metaData, error: metaError } = await supabase.storage
+    await supabase.storage
       .from('uploads')
       .upload(metadataPath, JSON.stringify(metadata, null, 2), {
         contentType: 'application/json',
         upsert: true,
       })
 
-    if (metaError) {
-      console.log('⚠️ Metadata upload error:', metaError.message)
-      // Don't fail the whole request if metadata fails
-    } else {
-      console.log('✅ Metadata uploaded successfully:', metaData)
-    }
-
-    // Buat base URL dari env atau fallback ke origin
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin
     const downloadUrl = `${baseUrl}/api/download/${slug}`
-
-    console.log('🔗 Final download URL:', downloadUrl)
 
     return NextResponse.json({
       success: true,
       slug,
       fileName: file.name,
       fileSize: file.size,
-      fileSizeFormatted: formatFileSize(file.size),
       downloadUrl,
       message: 'Upload successful'
     })
 
   } catch (error) {
     console.log('💥 Unexpected error:', error)
-    
-    // Handle specific errors
-    if (error instanceof Error) {
-      if (error.message.includes('PayloadTooLargeError') || 
-          error.message.includes('Request entity too large')) {
-        return NextResponse.json(
-          { error: 'File too large. Please try a smaller file.' }, 
-          { status: 413 }
-        )
-      }
-    }
-    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -140,13 +95,41 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Helper function untuk format file size
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes'
-  
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+// Generate signed URL untuk direct upload (file besar)
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const fileName = searchParams.get('fileName')
+    const fileSize = searchParams.get('fileSize')
+
+    if (!fileName) {
+      return NextResponse.json({ error: 'fileName required' }, { status: 400 })
+    }
+
+    const slug = generateSlug()
+    const filePath = `${slug}/${fileName}`
+
+    // Generate signed URL untuk upload langsung ke Supabase
+    const { data, error } = await supabase.storage
+      .from('uploads')
+      .createSignedUploadUrl(filePath)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      signedUrl: data.signedUrl,
+      path: data.path,
+      slug,
+      fileName
+    })
+
+  } catch (error) {
+    console.log('💥 Error generating signed URL:', error)
+    return NextResponse.json(
+      { error: 'Failed to generate upload URL' },
+      { status: 500 }
+    )
+  }
 }

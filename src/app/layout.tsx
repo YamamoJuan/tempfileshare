@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Head from "next/head";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,7 +14,23 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Temp File Share",
-  description: "k",
+  description: "Temporary file sharing service",
+  icons: {
+    icon: "https://yamamojuan.vercel.app/favicon.ico",
+    shortcut: "https://yamamojuan.vercel.app/favicon.ico",
+    apple: "https://yamamojuan.vercel.app/favicon.ico",
+  },
+  // Optional: tambah metadata lain
+  openGraph: {
+    title: "Temp File Share",
+    description: "Temporary file sharing service",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Temp File Share",
+    description: "Temporary file sharing service",
+  },
 };
 
 export default function RootLayout({
@@ -25,13 +40,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <Head>
-        <link
-          rel="icon"
-          href="https://yamamojuan.vercel.app/favicon.ico"
-          type="image/x-icon"
-        />
-      </Head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
