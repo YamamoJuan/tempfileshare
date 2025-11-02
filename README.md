@@ -196,7 +196,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 Dibuat dengan ❤️ oleh **juaN**
 
-- GitHub: [@yourusername](https://github.com/YamamoJuan)
+- GitHub: [@yamamojuan](https://github.com/YamamoJuan)
 - Email: yamamojuan@gmail.com
 - Website: [yamamojuan.vercel.app](https://yamamojuan.vercel.app)
 
