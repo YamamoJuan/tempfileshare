@@ -32,7 +32,7 @@ Aplikasi berbagi file sementara yang modern dan elegan dibangun dengan Next.js d
 
 ### Prasyarat
 
-- Node.js 18+ sudah terinstall
+- Node.js 18+ sudah terinstal
 - Akun Supabase dan project
 
 ### 1. Clone & Install Dependencies
