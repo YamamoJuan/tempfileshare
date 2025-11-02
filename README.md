@@ -1,6 +1,6 @@
 # 🚀 TempFileShare
 
-Aplikasi berbagi file sementara yang modern dan elegan dibangun dengan Next.js dan Supabase. Bagikan file dengan cepat dan aman menggunakan link yang dibuat otomatis dan akan expired secara otomatis.
+aplikasi berbagi file sementara yang modern dan elegan dibangun dengan Next.js dan Supabase. Bagikan file dengan cepat dan aman menggunakan link yang dibuat otomatis dan akan expired secara otomatis.
 
 ![TempFileShare](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)
 ![Supabase](https://img.shields.io/badge/Supabase-Storage-green?style=for-the-badge&logo=supabase)
