@@ -43,7 +43,7 @@ cd tempfileshare
 npm install
 ```
 
-### 2. Setup Environment
+### 2. Setup environment
 
 Buat file `.env.local`:
 
