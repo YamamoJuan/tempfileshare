@@ -1,4 +1,4 @@
-# 🚀 TempFileShareee
+# 🚀 TempFileShare
 
 Aplikasi berbagi file sementara yang modern dan elegan dibangun dengan Next.js dan Supabase. Bagikan file dengan cepat dan aman menggunakan link yang dibuat otomatis dan akan expired secara otomatis..
 
